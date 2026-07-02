@@ -15,6 +15,7 @@
         <module>stat-client</module>
         <module>stat-dto</module>
         <module>stat-server</module>
+        <module>stat-service</module>
     </modules>
 
     <dependencyManagement>
