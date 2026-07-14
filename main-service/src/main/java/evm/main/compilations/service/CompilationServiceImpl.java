@@ -10,6 +10,7 @@ import evm.main.event.dto.EventShortDto;
 import evm.main.event.mapper.EventMapper;
 import evm.main.event.model.Event;
 import evm.main.event.repository.EventRepository;
+import evm.main.event.service.EventService;
 import evm.main.exceptions.NotFoundException;
 import evm.main.requests.repository.RequestRepositoryJpa;
 import lombok.RequiredArgsConstructor;
@@ -36,41 +37,22 @@ public class CompilationServiceImpl implements CompilationService {
     private final EventRepository eventRepository;
     private final RequestRepositoryJpa requestRepository;
 
+    private final EventService eventService;
+
     private final CompilationMapper compilationMapper;
     private final EventMapper eventMapper;
 
     @Override
     @Transactional
     public CompilationDto addCompilation(NewCompilationDto newCompilationDto) {
-        Compilation compilation = compilationMapper.toEntity(newCompilationDto);
 
-        if (newCompilationDto.getEvents() != null && !newCompilationDto.getEvents().isEmpty()) {
-            compilation.setEvents(eventRepository
-                    .findAllByIdIn(newCompilationDto
-                            .getEvents().toList()
-                    );
-        }
-
+        Set<Event> eventsSet = newCompilationDto.getEvents().???;
+        Compilation compilation = compilationMapper.toEntity(newCompilationDto, eventsSet);
         Compilation savedCompilation = compilationRepository.save(compilation);
 
-        List<Long> ids = savedCompilation
-                .getEvents()
-                .stream()
-                .map(Event::getId)
-                .toList();
+        List<EventShortDto> eventsShortList = ???;
+        return compilationMapper.toDto(savedCompilation, eventsShortList);
 
-        Map<Long, Long> confirmedRequests = requestRepository.countConfirmedByEventIds(ids);
-
-        List<EventShortDto> eventsWithRequests = savedCompilation.getEvents().stream()
-                .map(event -> eventMapper.toShortDto(
-                        event, confirmedRequests
-                                .getOrDefault(event.getId(), 0L)))
-                .toList();
-
-        return new CompilationDto(savedCompilation.getId(),
-                savedCompilation.getPinned(),
-                savedCompilation.getTitle(),
-                eventsWithRequests);
     }
 
     @Override
@@ -101,7 +83,13 @@ public class CompilationServiceImpl implements CompilationService {
                 .distinct()
                 .toList();
 
-        Map<Long, Long> confirmedRequests = requestRepository.countConfirmedByEventIds(eventsIds);
+        // не могу сообразить, как достучастья до этого метода, который возвращает кол-во просмотров по каждому событию
+        Map<Long, Long> viewsMap = eventService.getViewsMap(compilation.getEvents().stream().toList());
+        Map<Long, Long> confirmedRequests = requestRepository.countConfirmedByEventIds(eventsIds).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0], // event_id
+                        row -> (Long) row[1] // count
+                ));
 
         return compilations.stream()
                 .map(compilation -> new CompilationDto(
@@ -111,8 +99,9 @@ public class CompilationServiceImpl implements CompilationService {
                         compilation.getEvents().stream()
                                 .map(event -> eventMapper
                                         .toShortDto(
-                                                event, confirmedRequests
-                                                        .getOrDefault(event.getId(), 0L)))
+                                                event,
+                                                viewsMap.getOrDefault(event.getId(), 0L),
+                                                confirmedRequests.getOrDefault(event.getId(), 0L)))
                                 .toList()))
                 .toList();
     }
@@ -175,10 +164,19 @@ public class CompilationServiceImpl implements CompilationService {
                 .map(Event::getId)
                 .collect(Collectors.toList());
 
-        Map<Long, Long> confirmedRequests = requestRepository.countConfirmedByEventIds(ids);
+        Map<Long, Long> confirmedRequests = requestRepository.countConfirmedByEventIds(ids).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0], // event_id
+                        row -> (Long) row[1] // count
+                ));
+
+        // не могу сообразить, как достучастья до этого метода, который возвращает кол-во просмотров по каждому событию
+        Map<Long, Long> viewsMap = eventService.getViewsMap(compilation.getEvents().stream().toList());
 
         return compilation.getEvents().stream()
-                .map(event -> eventMapper.toShortDto(event, confirmedRequests.getOrDefault(event.getId(), 0L)))
+                .map(event -> eventMapper.toShortDto(event,
+                            viewsMap.getOrDefault(event.getId(), 0L),
+                            confirmedRequests.getOrDefault(event.getId(), 0L)))
                 .toList();
     }
 
