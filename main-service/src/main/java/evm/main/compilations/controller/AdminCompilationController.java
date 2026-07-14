@@ -2,6 +2,8 @@ package evm.main.compilations.controller;
 
 import evm.main.compilations.dto.CompilationDto;
 import evm.main.compilations.dto.NewCompilationDto;
+import evm.main.compilations.dto.UpdateCompilationRequest;
+import evm.main.compilations.service.CompilationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
